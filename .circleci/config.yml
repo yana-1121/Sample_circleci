@@ -1,28 +1,27 @@
-version: 2
+version: 2.1
+
+
+##################
+# Job Definitions
+##################
 jobs:
   build:
     docker: #dockerイメージ
       # バックエンド Python
       - image: circleci/python:3.6.2-stretch-browsers
-        auth:
-          username: mydockerhub-user
-          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
-          environment:
-            FLASK_CONFIG: testing
-            TEST_DATABASE_URL: postgresql://ubuntu@localhost/circle_test?sslmode=disable
+        environment:
+          FLASK_CONFIG: testing
+          TEST_DATABASE_URL: postgresql://ubuntu@localhost/circle_test?sslmode=disable
       # データベース  PostgreSQL
       - image: circleci/postgres:9.6.5-alpine-ram
-         auth:
-          username: mydockerhub-user
-          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
         environment:
           POSTGRES_USER: ubuntu
           POSTGRES_DB: circle_test
-          POSTGRES_PASSWORD: ""
+          POSTGRES_PASSWORD: ''
     steps:
       - checkout
       - run: mkdir test-reports
-      # (ブラウザのテストを自動化するための)Seleniumのインストールと実行
+      # Seleniumのインストールと実行
       - run:
           name: Download Selenium
           command: |
@@ -32,22 +31,21 @@ jobs:
           command: |
             java -jar selenium-server-standalone-3.5.3.jar -log test-reports/selenium.log
           background: true
-      # restore_cache: ステップ
+      #  restore_cache:ステップ
       - restore_cache:
-          key: deps1-{{ .Branch }}-{{ checksum "requirements/dev.txt" }}
-      - run:
+          key: deps2-{{ checksum "requirements/dev.txt" }}
         # Pythonの依存関係のインストール
-        name: Install Python deps in a venv
-        command: |
-          python3 -m venv venv
-          . venv/bin/activate
-          pip install -r requirements/dev.txt
-      # save_cache: ステップ
+      - run:
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -r requirements/dev.txt
+       # save_cache: ステップ
       # 指定されたパス (この例では venv) からキャッシュを作成します。
       - save_cache:
-          key: deps1-{{ .Branch }}-{{ checksum "requirements/dev.txt" }}
+          key: deps2-{{ checksum "requirements/dev.txt" }}
           paths:
-            - "venv"
+            - 'venv'
       - run:
           command: |
             . venv/bin/activate
