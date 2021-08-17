@@ -1,44 +1,28 @@
-version: 2.1
-
-#########
-# Common
-#########
-orbs:
-  heroku: circleci/heroku@1.0.1
-
-############
-# Workflows
-############
-workflows:
-  version: 2
-  build-deploy:
-    jobs:
-      - build
-      - deploy:
-          requires:
-            - build
-          filters:
-            branches:
-              only: master
-
-##################
-# Job Definitions
-##################
+version: 2
 jobs:
   build:
-    docker:
+    docker: #dockerイメージ
+      # バックエンド Python
       - image: circleci/python:3.6.2-stretch-browsers
-        environment:
-          FLASK_CONFIG: testing
-          TEST_DATABASE_URL: postgresql://ubuntu@localhost/circle_test?sslmode=disable
+        auth:
+          username: mydockerhub-user
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
+          environment:
+            FLASK_CONFIG: testing
+            TEST_DATABASE_URL: postgresql://ubuntu@localhost/circle_test?sslmode=disable
+      # データベース  PostgreSQL
       - image: circleci/postgres:9.6.5-alpine-ram
+         auth:
+          username: mydockerhub-user
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
         environment:
           POSTGRES_USER: ubuntu
           POSTGRES_DB: circle_test
-          POSTGRES_PASSWORD: ''
+          POSTGRES_PASSWORD: ""
     steps:
       - checkout
       - run: mkdir test-reports
+      # (ブラウザのテストを自動化するための)Seleniumのインストールと実行
       - run:
           name: Download Selenium
           command: |
@@ -48,17 +32,22 @@ jobs:
           command: |
             java -jar selenium-server-standalone-3.5.3.jar -log test-reports/selenium.log
           background: true
+      # restore_cache: ステップ
       - restore_cache:
-          key: deps2-{{ checksum "requirements/dev.txt" }}
+          key: deps1-{{ .Branch }}-{{ checksum "requirements/dev.txt" }}
       - run:
-          command: |
-            python3 -m venv venv
-            . venv/bin/activate
-            pip install -r requirements/dev.txt
+        # Pythonの依存関係のインストール
+        name: Install Python deps in a venv
+        command: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install -r requirements/dev.txt
+      # save_cache: ステップ
+      # 指定されたパス (この例では venv) からキャッシュを作成します。
       - save_cache:
-          key: deps2-{{ checksum "requirements/dev.txt" }}
+          key: deps1-{{ .Branch }}-{{ checksum "requirements/dev.txt" }}
           paths:
-            - 'venv'
+            - "venv"
       - run:
           command: |
             . venv/bin/activate
@@ -68,15 +57,3 @@ jobs:
           destination: tr1
       - store_test_results:
           path: test-reports/
-
-  deploy:
-    executor: heroku/default
-    steps:
-      - checkout
-      - add_ssh_keys:
-          fingerprints:
-            - '48:a0:87:54:ca:75:32:12:c6:9e:a2:77:a4:7a:08:a4'
-      - heroku/install
-      - heroku/deploy-via-git:
-          force: true
-
